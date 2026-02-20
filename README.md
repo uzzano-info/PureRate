@@ -3,7 +3,7 @@
 PureRate is a lightweight, natively compiled macOS Menu Bar application that effortlessly synchronizes your system's hardware audio sample rate to match the exact lossless/hi-res lossless format of the currently playing track in Apple Music.
 
 <img width="257" height="316" alt="SCR-20260220-nqxe" src="https://github.com/user-attachments/assets/868e0318-2079-45f8-802a-1408d95e852a" />
-<img width="253" height="346" alt="SCR-20260220-nrah" src="https://github.com/user-attachments/assets/344aa2c3-e75f-426f-ad06-cbe644b50336" />
+
 
 
 Apple Music currently does not automatically switch your macOS audio device's sample rate, requiring tedious manual intervention via the Audio MIDI Setup utility to ensure a bit-perfect output. PureRate runs completely silently in the background and resolves this automatically!
