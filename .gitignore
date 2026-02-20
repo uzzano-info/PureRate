@@ -1,0 +1,7 @@
+*.app
+*.dmg
+*.iconset
+AppIcon.icns
+log.png
+sampl.png
+.DS_Store

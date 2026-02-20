@@ -9,7 +9,7 @@
     <key>CFBundleName</key>
     <string>PureRate</string>
     <key>CFBundleIconFile</key>
-    <string></string>
+    <string>AppIcon</string>
     <key>CFBundleShortVersionString</key>
     <string>2.0</string>
     <key>CFBundleVersion</key>

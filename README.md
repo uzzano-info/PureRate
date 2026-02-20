@@ -8,6 +8,7 @@ Enjoy a true bit-perfect music listening experience.
 
 ## Features
 - **Automatic Audio Format Matching:** Automatically detects sample rate changes (e.g. 44.1kHz, 96kHz, 192kHz) through native unified logs and immediately instructs CoreAudio to match them.
+- **Custom App Icon & Glassmorphism UI:** Features a high-quality brand icon and a modern SwiftUI interface that blends natively with macOS.
 - **Selectable Target Hardware:** A sleek drop-down menu lets you explicitly assign which DAC/Audio Device gets synchronized, or default to whatever is currently active.
 - **Zero Distractions:** PureRate lives solely in your macOS status bar alongside your other utilities, cleanly hiding an optional icon.
 - **Launch at Login:** Seamless toggle via the `SMAppService` API ensures PureRate is ready every time your Mac turns on.

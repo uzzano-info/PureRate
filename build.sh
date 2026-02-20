@@ -13,6 +13,9 @@ mkdir -p "$OUT_RESOURCES"
 echo "Copying Info.plist..."
 cp Info.plist "$OUT_APP/Contents/"
 
+echo "Copying Assets..."
+cp AppIcon.icns "$OUT_RESOURCES/"
+
 echo "Compiling Swift files..."
 swiftc PureRateApp.swift LogMonitor.swift AudioDeviceManager.swift \
        -o "$OUT_MAC_OS/$APP_NAME" \

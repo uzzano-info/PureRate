@@ -19,10 +19,16 @@ TEMP_DIR=$(mktemp -d)
 echo "Copying app to temporary folder..."
 cp -a "$OUT_APP" "$TEMP_DIR/"
 
+echo "Adding DMG Background..."
+mkdir "$TEMP_DIR/.background"
+cp sampl.png "$TEMP_DIR/.background/background.png"
+
 # Create a symlink to Applications folder for easy drag-and-drop installing
 ln -s /Applications "$TEMP_DIR/Applications"
 
 echo "Running hdiutil..."
+# Note: setting background via hdiutil directly is tricky without OSA script, 
+# but copying it to a hidden folder is the first step.
 hdiutil create -volname "$APP_NAME" -srcfolder "$TEMP_DIR" -ov -format UDZO "$DMG_NAME"
 
 rm -rf "$TEMP_DIR"
