@@ -36,6 +36,14 @@ PureRate runs completely silently in the background. It monitors system logs to 
 2. Open the disk image and drag **PureRate.app** to your **Applications** folder.
 3. Launch PureRate and grant any requested permissions (Full Disk Access is often required for log reading).
 
+> **⚠️ "App is damaged and can't be opened" Error?**
+> Since PureRate is an open-source tool without a paid Apple Developer certificate, macOS Gatekeeper may flag the downloaded app as "damaged" due to its quarantine attribute. 
+> To fix this, open **Terminal** and run:
+> ```bash
+> xattr -cr /Applications/PureRate.app
+> ```
+> Then open the app normally.
+
 ### Method 2: Homebrew
 ```bash
 brew install --cask https://github.com/uzzano-info/PureRate/raw/main/purerate.rb
