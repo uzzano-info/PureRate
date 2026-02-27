@@ -320,7 +320,7 @@ struct ContentView: View {
 
             // Support Button
             Button {
-                if let url = URL(string: "https://www.buymeachoffee.com/purerate") {
+                if let url = URL(string: "https://www.buymeacoffee.com/uzzano") {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
