@@ -6,25 +6,37 @@ OUT_APP="$APP_NAME.app"
 OUT_MAC_OS="$OUT_APP/Contents/MacOS"
 OUT_RESOURCES="$OUT_APP/Contents/Resources"
 
-echo "Creating App Bundle Structure..."
+# Auto-detect the macOS SDK target from the current system
+MACOS_VERSION=$(sw_vers -productVersion | cut -d. -f1,2)
+ARCH=$(uname -m)
+TARGET="${ARCH}-apple-macosx${MACOS_VERSION}"
+
+echo "=== PureRate Build ==="
+echo "Target: $TARGET"
+echo ""
+
+echo "▸ Creating App Bundle Structure..."
+rm -rf "$OUT_APP"
 mkdir -p "$OUT_MAC_OS"
 mkdir -p "$OUT_RESOURCES"
 
-echo "Copying Info.plist..."
+echo "▸ Copying Info.plist..."
 cp Info.plist "$OUT_APP/Contents/"
 
-echo "Copying Assets..."
+echo "▸ Copying Assets..."
 cp AppIcon.icns "$OUT_RESOURCES/"
 
-echo "Compiling Swift files..."
+echo "▸ Compiling Swift files..."
 swiftc PureRateApp.swift LogMonitor.swift AudioDeviceManager.swift \
        -o "$OUT_MAC_OS/$APP_NAME" \
        -O \
-       -target arm64-apple-macosx26.3 \
+       -target "$TARGET" \
        -framework SwiftUI \
        -framework CoreAudio \
        -framework OSLog \
-       -framework Combine
+       -framework Combine \
+       -framework UserNotifications
 
-echo "Build complete. Output: $OUT_APP"
-echo "You can launch the app by running: open $OUT_APP"
+echo ""
+echo "✓ Build complete: $OUT_APP"
+echo "  Launch with: open $OUT_APP"

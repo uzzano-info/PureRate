@@ -1,7 +1,11 @@
-*.app
+# macOS build artifacts
+*.app/
 *.dmg
 *.iconset
+.DS_Store
+
+# Source assets (too large for git)
 AppIcon.icns
+AppIcon1.icns
 log.png
 sampl.png
-.DS_Store
