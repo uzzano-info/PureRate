@@ -65,7 +65,7 @@ cd PureRate
 
 If PureRate has improved your listening experience, consider supporting its continued development:
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-yellow.svg?style=for-the-badge&logoChart=buy-me-a-coffee)](https://www.buymeachoffee.com/purerate)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-yellow.svg?style=for-the-badge&logoChart=buy-me-a-coffee)](https://www.buymeachoffee.com/uzzano)
 
 **Help others discover bit-perfect audio:**
 - [Share on X (Twitter)](https://twitter.com/intent/tweet?text=Check%20out%20PureRate%20-%20The%20automatic%20sample%20rate%20switcher%20for%20Apple%20Music%20on%20macOS!%20https://purerate-web.vercel.app)
