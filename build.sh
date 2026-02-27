@@ -39,7 +39,10 @@ swiftc PureRateApp.swift LogMonitor.swift AudioDeviceManager.swift \
 
 echo ""
 echo "▸ Ad-hoc code signing (prevents Gatekeeper 'damaged' error)..."
-codesign --force --deep --sign - "$OUT_APP"
+codesign --force --deep --sign - \
+    --entitlements /dev/null \
+    --timestamp=none \
+    "$OUT_APP"
 
 echo ""
 echo "✓ Build complete: $OUT_APP"
