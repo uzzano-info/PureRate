@@ -32,6 +32,32 @@ xattr -cr "$TEMP_DIR/$OUT_APP"
 # Applications symlink for drag-and-drop install
 ln -s /Applications "$TEMP_DIR/Applications"
 
+# Installation help for users blocked by macOS Gatekeeper
+cat > "$TEMP_DIR/⚠️ If blocked by macOS, read this.txt" << 'EOF'
+PureRate — Installation Help
+────────────────────────────────────────────────────────
+
+If macOS shows: "Apple cannot verify that PureRate.app is free of malware..."
+
+  1. Click "Done" — do NOT click "Move to Trash"
+  2. Drag PureRate.app to Applications as usual
+  3. Open Terminal (⌘ Space → type Terminal → Enter) and run:
+
+         xattr -cr /Applications/PureRate.app
+
+  4. Open PureRate normally — no more warning.
+
+────────────────────────────────────────────────────────
+WHY THIS HAPPENS
+
+PureRate is a free, open-source app (MIT license) not sold through
+the Mac App Store. macOS adds a "quarantine" flag to internet-downloaded
+files and blocks apps that lack Apple's paid notarization certificate.
+The xattr command safely removes that flag.
+
+Source code & issues: https://github.com/uzzano-info/PureRate
+EOF
+
 # 1. Create a writable DMG first to set metadata
 echo "▸ Creating temporary writable DMG..."
 TMP_DMG="temp_build.dmg"

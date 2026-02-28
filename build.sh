@@ -6,10 +6,10 @@ OUT_APP="$APP_NAME.app"
 OUT_MAC_OS="$OUT_APP/Contents/MacOS"
 OUT_RESOURCES="$OUT_APP/Contents/Resources"
 
-# Auto-detect the macOS SDK target from the current system
-MACOS_VERSION=$(sw_vers -productVersion | cut -d. -f1,2)
+# Minimum deployment target (matches Info.plist LSMinimumSystemVersion)
+MIN_MACOS="14.0"
 ARCH=$(uname -m)
-TARGET="${ARCH}-apple-macosx${MACOS_VERSION}"
+TARGET="${ARCH}-apple-macosx${MIN_MACOS}"
 
 echo "=== PureRate Build ==="
 echo "Target: $TARGET"
@@ -37,8 +37,22 @@ swiftc PureRateApp.swift LogMonitor.swift AudioDeviceManager.swift \
        -framework Combine \
        -framework UserNotifications
 
-echo "▸ Ad-hoc signing the application bundle..."
-codesign --force --deep --sign - "$OUT_APP"
+echo "▸ Signing with hardened runtime..."
+codesign --force --sign - --options runtime --timestamp=none \
+         --entitlements /dev/stdin "$OUT_MAC_OS/$APP_NAME" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+</dict>
+</plist>
+PLIST
+codesign --force --sign - --options runtime --timestamp=none "$OUT_APP"
 
 echo ""
 echo "✓ Build complete: $OUT_APP"
