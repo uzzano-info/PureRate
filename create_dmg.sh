@@ -26,6 +26,8 @@ echo "=== Creating DMG Installer ==="
 TEMP_DIR=$(mktemp -d)
 echo "▸ Staging app bundle..."
 cp -R "$OUT_APP" "$TEMP_DIR/"
+# Pre-emptively remove quarantine tags and metadata before packaging
+xattr -cr "$TEMP_DIR/$OUT_APP"
 
 # Applications symlink for drag-and-drop install
 ln -s /Applications "$TEMP_DIR/Applications"
@@ -62,10 +64,6 @@ echo "▸ Converting to final compressed DMG..."
 hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_NAME"
 rm "$TMP_DMG"
 rm -rf "$TEMP_DIR"
-
-# 4. Remove local quarantine flags (helpful for redistribution)
-echo "▸ Cleaning up quarantine attributes..."
-xattr -cr "$DMG_NAME"
 
 DMG_SIZE=$(du -h "$DMG_NAME" | cut -f1)
 echo ""
