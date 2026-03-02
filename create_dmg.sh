@@ -4,13 +4,22 @@ set -e
 # ============================================================
 # PureRate – DMG Installer Creator
 # Creates a polished .dmg with Applications symlink and custom icon
+# Optionally notarizes with Apple (requires Developer ID)
 # ============================================================
 
-APP_NAME="PureRate"
+APP_NAME="PureRate_3.0"
 OUT_APP="$APP_NAME.app"
 DMG_NAME="$APP_NAME.dmg"
 VOL_NAME="$APP_NAME Installer"
 ICON_FILE="AppIcon.icns"
+
+# ── Notarization Credentials ──
+# Set these env vars to enable automatic notarization:
+#   export APPLE_ID="your@apple.id"
+#   export TEAM_ID="YOUR_TEAM_ID"
+#   export APP_PASSWORD="app-specific-password"
+# Generate app-specific password at: https://appleid.apple.com/account/manage
+NOTARIZE=${APPLE_ID:+true}
 
 if [ ! -d "$OUT_APP" ]; then
     echo "✗ Error: $OUT_APP not found. Run ./build.sh first."
@@ -32,7 +41,8 @@ xattr -cr "$TEMP_DIR/$OUT_APP"
 # Applications symlink for drag-and-drop install
 ln -s /Applications "$TEMP_DIR/Applications"
 
-# Installation help for users blocked by macOS Gatekeeper
+# Installation help — only include if NOT notarized
+if [ "$NOTARIZE" != "true" ]; then
 cat > "$TEMP_DIR/⚠️ If blocked by macOS, read this.txt" << 'EOF'
 PureRate — Installation Help
 ────────────────────────────────────────────────────────
@@ -57,6 +67,7 @@ The xattr command safely removes that flag.
 
 Source code & issues: https://github.com/uzzano-info/PureRate
 EOF
+fi
 
 # 1. Create a writable DMG first to set metadata
 echo "▸ Creating temporary writable DMG..."
@@ -78,8 +89,6 @@ SetFile -a C "$MOUNT_POINT"
 if [ -f "sampl.png" ]; then
     mkdir -p "$MOUNT_POINT/.background"
     cp sampl.png "$MOUNT_POINT/.background/background.png"
-    # Note: Modern Finder background setting usually requires AppleScript, 
-    # but we'll stick to icons for now as requested.
 fi
 
 sync
@@ -95,3 +104,25 @@ DMG_SIZE=$(du -h "$DMG_NAME" | cut -f1)
 echo ""
 echo "✓ DMG created: $(pwd)/$DMG_NAME ($DMG_SIZE)"
 echo "✓ Volume icon applied from $ICON_FILE"
+
+# ── 4. Notarization ──
+if [ "$NOTARIZE" = "true" ]; then
+    echo ""
+    echo "=== Apple Notarization ==="
+
+    echo "▸ Submitting to Apple for notarization..."
+    xcrun notarytool submit "$DMG_NAME" \
+        --apple-id "$APPLE_ID" \
+        --team-id "$TEAM_ID" \
+        --password "$APP_PASSWORD" \
+        --wait
+
+    echo "▸ Stapling notarization ticket..."
+    xcrun stapler staple "$DMG_NAME"
+
+    echo ""
+    echo "✓ Notarization complete — users will see 'Open' dialog instead of block"
+else
+    echo ""
+    echo "⚠ Notarization skipped (set APPLE_ID, TEAM_ID, APP_PASSWORD to enable)"
+fi

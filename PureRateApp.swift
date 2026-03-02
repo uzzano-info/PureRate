@@ -99,7 +99,7 @@ struct ContentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("PureRate")
+                    Text("PureRate 3.0")
                         .font(.system(size: 14, weight: .bold))
                     Text("Bit-Perfect Audio")
                         .font(.system(size: 10))

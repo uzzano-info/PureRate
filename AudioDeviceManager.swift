@@ -132,23 +132,83 @@ class AudioDeviceManager {
     }
 
     func setNominalSampleRate(deviceID: AudioDeviceID, sampleRate: Double) -> Bool {
+        // 1. Get the first output stream
+        var streamAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreams,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(deviceID, &streamAddress, 0, nil, &dataSize)
+        if status != noErr || dataSize == 0 { return false }
+
+        let streamCount = Int(dataSize) / MemoryLayout<AudioStreamID>.size
+        var streamIDs = [AudioStreamID](repeating: 0, count: streamCount)
+        status = AudioObjectGetPropertyData(deviceID, &streamAddress, 0, nil, &dataSize, &streamIDs)
+        if status != noErr || streamIDs.isEmpty { return false }
+
+        let streamID = streamIDs[0]
+
+        // 2. Get available physical formats for the stream
+        var availFormatsAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioStreamPropertyAvailablePhysicalFormats,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        status = AudioObjectGetPropertyDataSize(streamID, &availFormatsAddress, 0, nil, &dataSize)
+        if status != noErr || dataSize == 0 { return false }
+
+        let formatCount = Int(dataSize) / MemoryLayout<AudioStreamRangedDescription>.size
+        var availableFormats = [AudioStreamRangedDescription](repeating: AudioStreamRangedDescription(), count: formatCount)
+        status = AudioObjectGetPropertyData(streamID, &availFormatsAddress, 0, nil, &dataSize, &availableFormats)
+        if status != noErr || availableFormats.isEmpty { return false }
+
+        // 3. Find the format matching the target sample rate with the highest bit depth
+        // mSampleRateRange.mMinimum <= sampleRate <= mSampleRateRange.mMaximum
+        // Prefer Linear PCM (kAudioFormatLinearPCM)
+        var bestFormat: AudioStreamBasicDescription? = nil
+        var highestBitDepth: UInt32 = 0
+
+        for rangedDesc in availableFormats {
+            let asbd = rangedDesc.mFormat
+            if asbd.mFormatID != kAudioFormatLinearPCM { continue }
+            
+            // Check if sample rate matches
+            let targetRateEq = abs(asbd.mSampleRate - sampleRate) < 1.0
+            let rateInRange = sampleRate >= rangedDesc.mSampleRateRange.mMinimum && sampleRate <= rangedDesc.mSampleRateRange.mMaximum
+            
+            if targetRateEq || rateInRange {
+                if bestFormat == nil || asbd.mBitsPerChannel > highestBitDepth {
+                    bestFormat = asbd
+                    // If the asbd's sample rate is just a placeholder (like 0), explicitly set it
+                    if !targetRateEq {
+                        bestFormat?.mSampleRate = sampleRate
+                    }
+                    highestBitDepth = asbd.mBitsPerChannel
+                }
+            }
+        }
+
+        // 4. Set the physical format
+        if var formatToSet = bestFormat {
+            var physFormatAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioStreamPropertyPhysicalFormat,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            let asbdSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+            status = AudioObjectSetPropertyData(streamID, &physFormatAddr, 0, nil, asbdSize, &formatToSet)
+            return status == noErr
+        }
+
+        // Fallback: If no appropriate physical format is found, try just setting nominal rate as before
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyNominalSampleRate,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         var targetSampleRate: Float64 = sampleRate
-        let dataSize = UInt32(MemoryLayout<Float64>.size)
-
-        let status = AudioObjectSetPropertyData(
-            deviceID,
-            &propertyAddress,
-            0,
-            nil,
-            dataSize,
-            &targetSampleRate
-        )
-
+        status = AudioObjectSetPropertyData(deviceID, &propertyAddress, 0, nil, UInt32(MemoryLayout<Float64>.size), &targetSampleRate)
         return status == noErr
     }
 

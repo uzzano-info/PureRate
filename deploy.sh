@@ -3,7 +3,18 @@ set -e
 
 # ============================================================
 # PureRate – Full Deploy Pipeline
-# Builds app and creates DMG
+# Builds app, creates DMG, and optionally notarizes
+#
+# USAGE:
+#   # Ad-hoc (no Developer ID):
+#   ./deploy.sh
+#
+#   # With Developer ID signing + notarization:
+#   export SIGN_IDENTITY="Developer ID Application: Your Name (TEAM_ID)"
+#   export APPLE_ID="your@apple.id"
+#   export TEAM_ID="YOUR_TEAM_ID"
+#   export APP_PASSWORD="app-specific-password"
+#   ./deploy.sh
 # ============================================================
 
 echo "╔══════════════════════════════════════════╗"
@@ -19,7 +30,7 @@ echo "━━━ Step 1/2: Building App ━━━"
 ./build.sh
 echo ""
 
-# ── Step 2: Create DMG ──
+# ── Step 2: Create DMG (+ Notarize if credentials set) ──
 echo "━━━ Step 2/2: Creating DMG Installer ━━━"
 ./create_dmg.sh
 echo ""
@@ -27,12 +38,9 @@ echo ""
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║          Deploy Complete! 🎉             ║"
-╠══════════════════════════════════════════╣
-║                                          ║
-║  App:     PureRate.app                   ║
-║  DMG:     PureRate.dmg                   ║
-║                                          ║
-║  Notice: The website is now in a         ║
-║  separate project.                       ║
-║                                          ║
-╚══════════════════════════════════════════╝
+echo "╠══════════════════════════════════════════╣"
+echo "║                                          ║"
+echo "║  App:     PureRate.app                   ║"
+echo "║  DMG:     PureRate.dmg                   ║"
+echo "║                                          ║"
+echo "╚══════════════════════════════════════════╝"
