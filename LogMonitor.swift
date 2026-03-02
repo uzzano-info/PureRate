@@ -14,6 +14,8 @@ struct RateChangeEvent: Identifiable {
     let date: Date
     let fromRate: Double?
     let toRate: Double
+    let fromBitDepth: UInt32?
+    let toBitDepth: UInt32?
     let deviceName: String?
     let success: Bool
 }
@@ -78,6 +80,7 @@ class LogMonitor: ObservableObject {
     private var timer: Timer?
     private let manager = AudioDeviceManager.shared
     private var lastObservedRate: Double?
+    private var lastObservedBitDepth: UInt32?
     private var switchCount: Int = 0
     @Published var totalSwitches: Int = 0
 
@@ -237,15 +240,67 @@ class LogMonitor: ObservableObject {
                             }
                         }
                     }
+
+                    // Extract Bit Depth from various patterns
+                    var parsedBitDepth: UInt32? = nil
+                    
+                    if message.contains("[BitDepth ") {
+                        if let range1 = message.range(of: "[BitDepth "),
+                           let range2 = message.range(of: "]", range: range1.upperBound..<message.endIndex) {
+                            let valStr = String(message[range1.upperBound..<range2.lowerBound]).trimmingCharacters(in: .whitespaces)
+                            if let val = UInt32(valStr) { parsedBitDepth = val }
+                        }
+                    } else if message.contains("sdBitDepth = ") {
+                        if let range1 = message.range(of: "sdBitDepth = "),
+                           let range2 = message.range(of: " bit", range: range1.upperBound..<message.endIndex) {
+                            let valStr = String(message[range1.upperBound..<range2.lowerBound]).trimmingCharacters(in: .whitespaces)
+                            if let val = UInt32(valStr) { parsedBitDepth = val }
+                        }
+                    } else if message.contains("from ") && message.contains("-bit source") {
+                        if let range1 = message.range(of: "from "),
+                           let range2 = message.range(of: "-bit source", range: range1.upperBound..<message.endIndex) {
+                            let valStr = String(message[range1.upperBound..<range2.lowerBound]).trimmingCharacters(in: .whitespaces)
+                            if let val = UInt32(valStr) { parsedBitDepth = val }
+                        }
+                    }
+                    
+                    if let newDepth = parsedBitDepth {
+                        // Only capture realistically valid bit depths (16, 24, 32)
+                        if newDepth == 16 || newDepth == 24 || newDepth == 32 {
+                            // If we already have a bit depth, don't overwrite it if it's the same, 
+                            // but we'll collect the last valid one in the loop.
+                            lastObservedBitDepth = newDepth
+                        }
+                    }
                 }
 
-                if let targetRate = newSampleRate, targetRate != self.lastObservedRate {
-                    self.lastObservedRate = targetRate
-                    self.updateDeviceSampleRate(to: targetRate)
+                let targetBitDepth = self.lastObservedBitDepth
+                
+                if let targetRate = newSampleRate {
+                    let rateChanged = targetRate != self.lastObservedRate
+                    // To handle the case where only bit depth changed but not sample rate
+                    // We need the bit depth from the device to know if it actually needs changing
+                    var bitDepthNeedsUpdate = false
+                    
+                    if let targetDepth = targetBitDepth {
+                        let currentDeviceDepth = self.manager.getStreamBitDepth(deviceID: self.targetDeviceID ?? self.manager.getDefaultOutputDevice() ?? 0)
+                        if currentDeviceDepth != targetDepth {
+                            bitDepthNeedsUpdate = true
+                        }
+                    }
+
+                    if rateChanged || bitDepthNeedsUpdate {
+                        self.lastObservedRate = targetRate
+                        self.updateDeviceSampleRate(to: targetRate, targetBitDepth: targetBitDepth)
+                    }
                 }
 
                 DispatchQueue.main.async {
                     self.lastError = nil
+                    // Ensure the UI bit depth stays in sync with the last valid observed bit depth
+                    if let observedDepth = self.lastObservedBitDepth {
+                        self.bitDepth = observedDepth
+                    }
                 }
             } catch {
                 logger.error("Failed to read OSLog: \(error.localizedDescription)")
@@ -258,24 +313,27 @@ class LogMonitor: ObservableObject {
 
     // MARK: Rate Switching
 
-    func updateDeviceSampleRate(to rate: Double) {
+    func updateDeviceSampleRate(to rate: Double, targetBitDepth: UInt32?) {
         guard let deviceID = targetDeviceID ?? manager.getDefaultOutputDevice() else { return }
 
         let currentRate = manager.getNominalSampleRate(deviceID: deviceID)
+        let currentDepth = manager.getStreamBitDepth(deviceID: deviceID)
         let name = manager.getDeviceName(deviceID: deviceID)
 
         DispatchQueue.main.async {
             self.activeDeviceName = name
         }
 
-        if currentRate != rate {
-            logger.notice("Switching sample rate to \(rate) Hz from \(currentRate ?? .nan)")
-            let success = manager.setNominalSampleRate(deviceID: deviceID, sampleRate: rate)
+        if currentRate != rate || (targetBitDepth != nil && currentDepth != targetBitDepth) {
+            logger.notice("Switching sample rate to \(rate) Hz from \(currentRate ?? .nan) and bit depth to \(targetBitDepth ?? 0)")
+            let success = manager.setDeviceFormat(deviceID: deviceID, sampleRate: rate, bitDepth: targetBitDepth)
 
             let event = RateChangeEvent(
                 date: Date(),
                 fromRate: currentRate,
                 toRate: rate,
+                fromBitDepth: currentDepth,
+                toBitDepth: targetBitDepth,
                 deviceName: name,
                 success: success
             )
@@ -294,7 +352,8 @@ class LogMonitor: ObservableObject {
                 if self.notificationsEnabled {
                     let content = UNMutableNotificationContent()
                     content.title = "PureRate"
-                    content.body = String(format: "Switched to %.1f kHz on %@", rate / 1000.0, name ?? "device")
+                    let bitDepthString = targetBitDepth != nil ? ", \(targetBitDepth!)-bit" : ""
+                    content.body = String(format: "Switched to %.1f kHz%@ on %@", rate / 1000.0, bitDepthString, name ?? "device")
                     let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
                     UNUserNotificationCenter.current().add(request)
                 }

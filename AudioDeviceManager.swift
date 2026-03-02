@@ -131,7 +131,7 @@ class AudioDeviceManager {
         return status == noErr ? sampleRate : nil
     }
 
-    func setNominalSampleRate(deviceID: AudioDeviceID, sampleRate: Double) -> Bool {
+    func setDeviceFormat(deviceID: AudioDeviceID, sampleRate: Double, bitDepth: UInt32? = nil) -> Bool {
         // 1. Get the first output stream
         var streamAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreams,
@@ -149,6 +149,19 @@ class AudioDeviceManager {
 
         let streamID = streamIDs[0]
 
+        // 1.5 Get current physical format to ensure we maintain the same channel count
+        var currentFormatAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioStreamPropertyPhysicalFormat,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var currentFormat = AudioStreamBasicDescription()
+        dataSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        let currentStatus = AudioObjectGetPropertyData(streamID, &currentFormatAddress, 0, nil, &dataSize, &currentFormat)
+        
+        // Default to stereo if we can't get it, otherwise use whatever the stream is already set to
+        let currentChannels: UInt32 = (currentStatus == noErr && currentFormat.mChannelsPerFrame > 0) ? currentFormat.mChannelsPerFrame : 2
+
         // 2. Get available physical formats for the stream
         var availFormatsAddress = AudioObjectPropertyAddress(
             mSelector: kAudioStreamPropertyAvailablePhysicalFormats,
@@ -163,33 +176,71 @@ class AudioDeviceManager {
         status = AudioObjectGetPropertyData(streamID, &availFormatsAddress, 0, nil, &dataSize, &availableFormats)
         if status != noErr || availableFormats.isEmpty { return false }
 
-        // 3. Find the format matching the target sample rate with the highest bit depth
-        // mSampleRateRange.mMinimum <= sampleRate <= mSampleRateRange.mMaximum
-        // Prefer Linear PCM (kAudioFormatLinearPCM)
-        var bestFormat: AudioStreamBasicDescription? = nil
-        var highestBitDepth: UInt32 = 0
+        // 3. Strict format matching
+        var matchingFormats: [AudioStreamBasicDescription] = []
 
         for rangedDesc in availableFormats {
             let asbd = rangedDesc.mFormat
             if asbd.mFormatID != kAudioFormatLinearPCM { continue }
-            
-            // Check if sample rate matches
-            let targetRateEq = abs(asbd.mSampleRate - sampleRate) < 1.0
-            let rateInRange = sampleRate >= rangedDesc.mSampleRateRange.mMinimum && sampleRate <= rangedDesc.mSampleRateRange.mMaximum
-            
-            if targetRateEq || rateInRange {
-                if bestFormat == nil || asbd.mBitsPerChannel > highestBitDepth {
-                    bestFormat = asbd
-                    // If the asbd's sample rate is just a placeholder (like 0), explicitly set it
-                    if !targetRateEq {
-                        bestFormat?.mSampleRate = sampleRate
-                    }
-                    highestBitDepth = asbd.mBitsPerChannel
+            // 3.1 channels must match current active channels to avert routing resets
+            if asbd.mChannelsPerFrame != currentChannels { continue }
+
+            let isDiscrete = (rangedDesc.mSampleRateRange.mMinimum == rangedDesc.mSampleRateRange.mMaximum)
+            var candidateRateMatched = false
+            var candidateASBD = asbd
+
+            // 3.2 Safe Rate Matching
+            if isDiscrete {
+                // For discrete formats, we CANNOT mutate mSampleRate, otherwise the device considers it an invalid format and shows 'null'
+                if abs(asbd.mSampleRate - sampleRate) < 1.0 {
+                    candidateRateMatched = true
+                    // keep candidateASBD as is
                 }
+            } else {
+                // For continuous range formats, we check if our rate is bounds, and if so, we safely mutate
+                if sampleRate >= rangedDesc.mSampleRateRange.mMinimum && sampleRate <= rangedDesc.mSampleRateRange.mMaximum {
+                    candidateRateMatched = true
+                    candidateASBD.mSampleRate = sampleRate
+                }
+            }
+
+            if candidateRateMatched {
+                matchingFormats.append(candidateASBD)
             }
         }
 
-        // 4. Set the physical format
+        // 3.3 Find the absolute best format using a strict scoring algorithm
+        let bestFormat = matchingFormats.max { (a, b) -> Bool in
+            // Return true if `a` is strictly mathematically WORSE than `b`,
+            // so `max` will pick the "best" one.
+
+            // Priority 1: Exact Bit Depth Match
+            if let target = bitDepth {
+                let aExact = (a.mBitsPerChannel == target)
+                let bExact = (b.mBitsPerChannel == target)
+                if aExact != bExact {
+                    return !aExact && bExact // a is worse if it's not exact but b is
+                }
+            }
+
+            // Priority 2: Higher Bit Depth (if exact doesn't apply or both are exact)
+            if a.mBitsPerChannel != b.mBitsPerChannel {
+                return a.mBitsPerChannel < b.mBitsPerChannel // a is worse if smaller
+            }
+
+            // Priority 3: Exact Format Flags Match (Mixable vs Non-Mixable, Interleaved, etc.)
+            // Crucial to prevent OS from rejecting the format and dropping the speaker routing
+            let aFlagsMatch = (a.mFormatFlags == currentFormat.mFormatFlags)
+            let bFlagsMatch = (b.mFormatFlags == currentFormat.mFormatFlags)
+            if aFlagsMatch != bFlagsMatch {
+                return !aFlagsMatch && bFlagsMatch // a is worse if it doesn't match current flags but b does
+            }
+
+            return false // They are equal in priority
+        }
+
+        // 4. Safely applying format
+        var formatSetSuccess = false
         if var formatToSet = bestFormat {
             var physFormatAddr = AudioObjectPropertyAddress(
                 mSelector: kAudioStreamPropertyPhysicalFormat,
@@ -197,19 +248,26 @@ class AudioDeviceManager {
                 mElement: kAudioObjectPropertyElementMain
             )
             let asbdSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-            status = AudioObjectSetPropertyData(streamID, &physFormatAddr, 0, nil, asbdSize, &formatToSet)
+            let physStatus = AudioObjectSetPropertyData(streamID, &physFormatAddr, 0, nil, asbdSize, &formatToSet)
+            if physStatus == noErr {
+                formatSetSuccess = true
+            }
+        }
+
+        // 5. Fallback if format application failed or no suitable format was found
+        if !formatSetSuccess {
+            // Revert to simply changing the nominal sample rate. This is the minimum required capability.
+            var propertyAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyNominalSampleRate,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var targetSampleRate: Float64 = sampleRate
+            status = AudioObjectSetPropertyData(deviceID, &propertyAddress, 0, nil, UInt32(MemoryLayout<Float64>.size), &targetSampleRate)
             return status == noErr
         }
 
-        // Fallback: If no appropriate physical format is found, try just setting nominal rate as before
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyNominalSampleRate,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var targetSampleRate: Float64 = sampleRate
-        status = AudioObjectSetPropertyData(deviceID, &propertyAddress, 0, nil, UInt32(MemoryLayout<Float64>.size), &targetSampleRate)
-        return status == noErr
+        return formatSetSuccess
     }
 
     // MARK: – Supported Sample Rates
