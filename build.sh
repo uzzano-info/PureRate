@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-APP_NAME="PureRate_3.0"
+APP_NAME="PureRate"
 OUT_APP="$APP_NAME.app"
 OUT_MAC_OS="$OUT_APP/Contents/MacOS"
 OUT_RESOURCES="$OUT_APP/Contents/Resources"

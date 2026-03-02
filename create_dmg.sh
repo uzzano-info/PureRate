@@ -7,7 +7,7 @@ set -e
 # Optionally notarizes with Apple (requires Developer ID)
 # ============================================================
 
-APP_NAME="PureRate_3.0"
+APP_NAME="PureRate"
 OUT_APP="$APP_NAME.app"
 DMG_NAME="$APP_NAME.dmg"
 VOL_NAME="$APP_NAME Installer"
